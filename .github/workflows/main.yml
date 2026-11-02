@@ -2,11 +2,10 @@
 name: Build UNLOCK Move APK
 
 on:
-  workflow_dispatch:
   push:
-    paths:
-      - 'UNLOCK_Move_OneUpload.zip'
-      - '.github/workflows/build-apk.yml'
+    branches:
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -26,43 +25,30 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
+      - name: Install Gradle 8.9
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-8.9-bin.zip
+          unzip -q gradle-8.9-bin.zip -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/gradle-8.9/bin" >> "$GITHUB_PATH"
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
 
       - name: Install Android SDK components
-        run: sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-
-      - name: Extract project ZIP
         run: |
-          if [ ! -f "UNLOCK_Move_OneUpload.zip" ]; then
-            echo "ERROR: UNLOCK_Move_OneUpload.zip not found in repository root."
-            exit 1
-          fi
-          mkdir -p source
-          unzip -o "UNLOCK_Move_OneUpload.zip" -d source
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Build debug APK
-        working-directory: source
-        run: gradle assembleDebug
-
-      - name: Find generated APK
-        id: apk
+      - name: Check Android project
         run: |
-          APK_PATH="$(find source -type f -path '*/build/outputs/apk/debug/*.apk' | head -n 1)"
-          if [ -z "$APK_PATH" ]; then
-            echo "ERROR: APK not found after build."
-            exit 1
-          fi
-          echo "path=$APK_PATH" >> "$GITHUB_OUTPUT"
+          test -f settings.gradle.kts
+          test -f app/build.gradle.kts
+
+      - name: Compile APK
+        run: gradle assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: UNLOCK-Move-APK
-          path: ${{ steps.apk.outputs.path }}
+          path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
